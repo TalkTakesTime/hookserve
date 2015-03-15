@@ -19,6 +19,9 @@ type Event struct {
 	Repo       string // The name of the repository
 	Branch     string // The branch the event took place on
 	Commit     string // The head commit hash attached to the event
+	Message    string // The commit message or pull request title
+	By         string // The person who performed the action
+	URL        string // The URL at which the event can be seen
 	Type       string // Can be either "pull_request" or "push"
 	BaseOwner  string // For Pull Requests, contains the base owner
 	BaseRepo   string // For Pull Requests, contains the base repo
@@ -196,6 +199,21 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		event.Message, err = request.Get("head_commit").Get("message").String()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		event.By, err = request.Get("commits").Get("author").Get("username").String()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		event.URL, err = request.Get("head_commit").Get("url").String()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		event.Owner, err = request.Get("repository").Get("owner").Get("name").String()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -230,6 +248,21 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		event.Commit, err = request.Get("pull_request").Get("head").Get("sha").String()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		event.Message, err = request.Get("pull_request").Get("title").String()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		event.By, err = request.Get("sender").Get("login").String()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		event.URL, err = request.Get("pull_request").Get("url").String()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
