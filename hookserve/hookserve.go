@@ -7,6 +7,7 @@ import (
 	"errors"
 	"github.com/bmatsuo/go-jsontree"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -14,18 +15,29 @@ import (
 
 var ErrInvalidEventFormat = errors.New("Unable to parse event string. Invalid Format.")
 
+type Commit struct {
+	Branch  string
+	By      string
+	Message string
+	SHA     string
+}
+
 type Event struct {
-	Owner      string // The username of the owner of the repository
-	Repo       string // The name of the repository
-	Branch     string // The branch the event took place on
-	Commit     string // The head commit hash attached to the event
-	Message    string // The commit message or pull request title
-	By         string // The person who performed the action
-	URL        string // The URL at which the event can be seen
-	Type       string // Can be either "pull_request" or "push"
+	Owner   string // The username of the owner of the repository
+	Repo    string // The name of the repository
+	Branch  string // The branch the event took place on
+	Commit  string // The head commit hash attached to the event
+	Message string // The commit message or pull request title
+	By      string // The person who performed the action
+	URL     string // The URL at which the event can be seen
+	Type    string // Can be either "pull_request" or "push"
+
 	BaseOwner  string // For Pull Requests, contains the base owner
 	BaseRepo   string // For Pull Requests, contains the base repo
 	BaseBranch string // For Pull Requests, contains the base branch
+
+	Size    int // For Pushes, the number of commits that were pushed at once
+	Commits []Commit
 }
 
 // Create a new event from a string, the string format being the same as the one produced by event.String()
@@ -121,6 +133,8 @@ func (s *Server) GoListenAndServe() {
 func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	defer req.Body.Close()
 
+	log.Println("received request")
+
 	if req.Method != "POST" {
 		http.Error(w, "405 Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -142,6 +156,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	body, err := ioutil.ReadAll(req.Body)
 	if err != nil {
+		log.Println("error reading body")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -168,6 +183,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	request := jsontree.New()
 	err = request.UnmarshalJSON(body)
 	if err != nil {
+		log.Println("couldn't unmarshal json")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -204,7 +220,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		event.By, err = request.Get("commits").Get("author").Get("username").String()
+		event.By, err = request.Get("pusher").Get("name").String()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -218,6 +234,46 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
+		}
+		commitsArray, err := request.Get("commits").Array()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		event.Size = len(commitsArray)
+		// add the commits
+		event.Commits = make([]Commit, event.Size)
+		var commit Commit
+		for i := 0; i < event.Size; i++ {
+			rawCommit := request.Get("commits").GetIndex(i)
+			if err != nil {
+				log.Println("couldn't get commit", i)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			commit = Commit{}
+			commit.Branch = event.Branch
+			commit.By, err = rawCommit.Get("author").Get("username").String()
+			if err != nil {
+				log.Println("couldn't get By for commit", i)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			commit.SHA, err = rawCommit.Get("id").String()
+			if err != nil {
+				log.Println("couldn't get SHA for commit", i)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			commit.Message, err = rawCommit.Get("message").String()
+			if err != nil {
+				log.Println("couldn't get Message for commit", i)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			event.Commits = append(event.Commits, commit)
 		}
 	} else if eventType == "pull_request" {
 		action, err := request.Get("action").String()
