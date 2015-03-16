@@ -273,7 +273,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				return
 			}
 
-			event.Commits = append(event.Commits, commit)
+			event.Commits[i] = commit
 		}
 	} else if eventType == "pull_request" {
 		action, err := request.Get("action").String()
