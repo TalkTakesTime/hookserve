@@ -32,6 +32,7 @@ type Event struct {
 	URL     string // The URL at which the event can be seen
 	Type    string // Can be either "pull_request" or "push"
 
+	Action     string // For Pull Requests, contains the action (open/close etc)
 	BaseOwner  string // For Pull Requests, contains the base owner
 	BaseRepo   string // For Pull Requests, contains the base repo
 	BaseBranch string // For Pull Requests, contains the base branch
@@ -282,12 +283,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		// If the action is not to open or to synchronize we don't care about it
-		if action != "synchronize" && action != "opened" {
+		if action != "synchronize" && action != "opened" && action != "closed" && action != "reopened" {
 			return
 		}
 
 		// Fill in values
 		event.Type = eventType
+		event.Action = action
 		event.Owner, err = request.Get("pull_request").Get("head").Get("repo").Get("owner").Get("login").String()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
