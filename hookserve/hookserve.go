@@ -33,6 +33,7 @@ type Event struct {
 	Type    string // Can be either "pull_request" or "push"
 
 	Action     string // For Pull Requests, contains the action (open/close etc)
+	Number     string // For Pull Requests, the number of the pull req
 	BaseOwner  string // For Pull Requests, contains the base owner
 	BaseRepo   string // For Pull Requests, contains the base repo
 	BaseBranch string // For Pull Requests, contains the base branch
@@ -325,6 +326,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		number, err := request.Get("number").Number()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		event.Number = strconv.Itoa(int(number))
 		event.BaseOwner, err = request.Get("pull_request").Get("base").Get("repo").Get("owner").Get("login").String()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
