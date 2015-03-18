@@ -321,7 +321,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		event.URL, err = request.Get("pull_request").Get("url").String()
+		event.URL, err = request.Get("pull_request").Get("html_url").String()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
